@@ -14,16 +14,237 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          resource_id: string | null
+          resource_type: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          resource_id?: string | null
+          resource_type: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          resource_id?: string | null
+          resource_type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      file_replicas: {
+        Row: {
+          created_at: string
+          file_id: string
+          id: string
+          node_id: string
+          replica_path: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          file_id: string
+          id?: string
+          node_id: string
+          replica_path: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          file_id?: string
+          id?: string
+          node_id?: string
+          replica_path?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_replicas_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_replicas_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "storage_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      files: {
+        Row: {
+          checksum: string
+          filename: string
+          id: string
+          is_deleted: boolean
+          mime_type: string | null
+          original_filename: string
+          owner_id: string
+          primary_node_id: string | null
+          size: number
+          storage_path: string
+          updated_at: string
+          uploaded_at: string
+        }
+        Insert: {
+          checksum: string
+          filename: string
+          id?: string
+          is_deleted?: boolean
+          mime_type?: string | null
+          original_filename: string
+          owner_id: string
+          primary_node_id?: string | null
+          size: number
+          storage_path: string
+          updated_at?: string
+          uploaded_at?: string
+        }
+        Update: {
+          checksum?: string
+          filename?: string
+          id?: string
+          is_deleted?: boolean
+          mime_type?: string | null
+          original_filename?: string
+          owner_id?: string
+          primary_node_id?: string | null
+          size?: number
+          storage_path?: string
+          updated_at?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "files_primary_node_id_fkey"
+            columns: ["primary_node_id"]
+            isOneToOne: false
+            referencedRelation: "storage_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string
+          id: string
+          storage_quota: number
+          updated_at: string
+          used_storage: number
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email: string
+          id: string
+          storage_quota?: number
+          updated_at?: string
+          used_storage?: number
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          id?: string
+          storage_quota?: number
+          updated_at?: string
+          used_storage?: number
+        }
+        Relationships: []
+      }
+      storage_nodes: {
+        Row: {
+          capacity: number
+          created_at: string
+          id: string
+          location: string | null
+          node_name: string
+          status: string
+          updated_at: string
+          used_space: number
+        }
+        Insert: {
+          capacity?: number
+          created_at?: string
+          id?: string
+          location?: string | null
+          node_name: string
+          status?: string
+          updated_at?: string
+          used_space?: number
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          id?: string
+          location?: string | null
+          node_name?: string
+          status?: string
+          updated_at?: string
+          used_space?: number
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +371,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
