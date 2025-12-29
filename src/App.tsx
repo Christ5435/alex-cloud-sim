@@ -12,6 +12,7 @@ import NodesPage from "./pages/dashboard/NodesPage";
 import ActivityPage from "./pages/dashboard/ActivityPage";
 import SettingsPage from "./pages/dashboard/SettingsPage";
 import AdminPage from "./pages/dashboard/AdminPage";
+import SharedFile from "./pages/SharedFile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/dashboard/activity" element={<ActivityPage />} />
             <Route path="/dashboard/settings" element={<SettingsPage />} />
             <Route path="/dashboard/admin" element={<AdminPage />} />
+            <Route path="/shared/:token" element={<SharedFile />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
