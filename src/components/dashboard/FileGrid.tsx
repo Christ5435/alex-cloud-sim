@@ -47,13 +47,27 @@ interface FileItem {
 
 interface FileGridProps {
   refreshTrigger?: number;
+  searchQuery?: string;
+  sortBy?: string;
+  viewMode?: 'grid' | 'list';
+  compact?: boolean;
 }
 
-export function FileGrid({ refreshTrigger }: FileGridProps) {
+export function FileGrid({ 
+  refreshTrigger, 
+  searchQuery: externalSearchQuery, 
+  sortBy = 'newest',
+  viewMode: externalViewMode,
+  compact = false
+}: FileGridProps) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  const [internalViewMode, setInternalViewMode] = useState<'grid' | 'list'>('grid');
+  
+  const searchQuery = externalSearchQuery ?? internalSearchQuery;
+  const viewMode = externalViewMode ?? internalViewMode;
+  const showControls = externalSearchQuery === undefined && externalViewMode === undefined;
   const [deleteFile, setDeleteFile] = useState<FileItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { user } = useAuth();
@@ -178,9 +192,21 @@ export function FileGrid({ refreshTrigger }: FileGridProps) {
     }
   };
 
-  const filteredFiles = files.filter(file =>
-    file.original_filename.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredFiles = files
+    .filter(file => file.original_filename.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest':
+          return new Date(a.uploaded_at).getTime() - new Date(b.uploaded_at).getTime();
+        case 'name':
+          return a.original_filename.localeCompare(b.original_filename);
+        case 'size':
+          return b.size - a.size;
+        case 'newest':
+        default:
+          return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+      }
+    });
 
   if (loading) {
     return (
@@ -192,35 +218,37 @@ export function FileGrid({ refreshTrigger }: FileGridProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search files..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+      {showControls && (
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search files..."
+              value={internalSearchQuery}
+              onChange={(e) => setInternalSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-1 border rounded-lg p-1">
+            <Button
+              variant={internalViewMode === 'grid' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setInternalViewMode('grid')}
+            >
+              <Grid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={internalViewMode === 'list' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setInternalViewMode('list')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-1 border rounded-lg p-1">
-          <Button
-            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setViewMode('grid')}
-          >
-            <Grid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setViewMode('list')}
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      )}
 
       {filteredFiles.length === 0 ? (
         <Card className="p-12 text-center">
