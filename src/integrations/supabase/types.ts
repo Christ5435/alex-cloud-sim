@@ -89,6 +89,59 @@ export type Database = {
           },
         ]
       }
+      file_shares: {
+        Row: {
+          created_at: string
+          download_count: number
+          expires_at: string | null
+          file_id: string
+          id: string
+          is_active: boolean
+          max_downloads: number | null
+          owner_id: string
+          password_hash: string | null
+          permission: string
+          share_token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          download_count?: number
+          expires_at?: string | null
+          file_id: string
+          id?: string
+          is_active?: boolean
+          max_downloads?: number | null
+          owner_id: string
+          password_hash?: string | null
+          permission?: string
+          share_token?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          download_count?: number
+          expires_at?: string | null
+          file_id?: string
+          id?: string
+          is_active?: boolean
+          max_downloads?: number | null
+          owner_id?: string
+          password_hash?: string | null
+          permission?: string
+          share_token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_shares_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       files: {
         Row: {
           checksum: string

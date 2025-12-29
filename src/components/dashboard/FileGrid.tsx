@@ -33,7 +33,9 @@ import {
   Grid,
   List,
   Loader2,
+  Share2,
 } from 'lucide-react';
+import { ShareDialog } from './ShareDialog';
 
 interface FileItem {
   id: string;
@@ -69,6 +71,7 @@ export function FileGrid({
   const viewMode = externalViewMode ?? internalViewMode;
   const showControls = externalSearchQuery === undefined && externalViewMode === undefined;
   const [deleteFile, setDeleteFile] = useState<FileItem | null>(null);
+  const [shareFile, setShareFile] = useState<FileItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -289,6 +292,10 @@ export function FileGrid({
                           <Download className="h-4 w-4 mr-2" />
                           Download
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setShareFile(file)}>
+                          <Share2 className="h-4 w-4 mr-2" />
+                          Share
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => setDeleteFile(file)}
                           className="text-destructive"
@@ -333,6 +340,10 @@ export function FileGrid({
                       <Download className="h-4 w-4 mr-2" />
                       Download
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShareFile(file)}>
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Share
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => setDeleteFile(file)}
                       className="text-destructive"
@@ -368,6 +379,12 @@ export function FileGrid({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ShareDialog
+        open={!!shareFile}
+        onOpenChange={(open) => !open && setShareFile(null)}
+        file={shareFile}
+      />
     </div>
   );
 }
