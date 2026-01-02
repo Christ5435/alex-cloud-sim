@@ -10,10 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, Users, Server, Plus, Loader2, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Server, Plus, Loader2, AlertTriangle, HardDrive } from 'lucide-react';
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
+import type { Database } from '@/integrations/supabase/types';
+
+type AppRole = Database['public']['Enums']['app_role'];
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -63,10 +67,33 @@ export default function AdminPage() {
     enabled: isAdmin,
   });
 
+  // Fetch all users with their roles
+  const { data: usersWithRoles, isLoading: usersLoading } = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (profilesError) throw profilesError;
+
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('*');
+      if (rolesError) throw rolesError;
+
+      return profiles.map(profile => ({
+        ...profile,
+        role: roles.find(r => r.user_id === profile.id)?.role || 'user',
+      }));
+    },
+    enabled: isAdmin,
+  });
+
   // Add new node mutation
   const addNode = useMutation({
     mutationFn: async () => {
-      const capacityBytes = parseFloat(nodeCapacity) * 1024 * 1024 * 1024; // Convert GB to bytes
+      const capacityBytes = parseFloat(nodeCapacity) * 1024 * 1024 * 1024;
       const { error } = await supabase
         .from('storage_nodes')
         .insert({
@@ -116,6 +143,31 @@ export default function AdminPage() {
     },
   });
 
+  // Update user role mutation
+  const updateUserRole = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ role })
+        .eq('user_id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({
+        title: 'Role updated',
+        description: 'User role has been updated successfully.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   if (roleLoading) {
     return (
       <DashboardLayout>
@@ -156,16 +208,30 @@ export default function AdminPage() {
         </div>
 
         {/* Stats Overview */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card className="border-border/50 bg-card/50 backdrop-blur">
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Server className="h-6 w-6 text-primary" />
+                  <Users className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Nodes</p>
-                  <p className="text-2xl font-bold">{nodes?.length || 0}</p>
+                  <p className="text-sm text-muted-foreground">Total Users</p>
+                  <p className="text-2xl font-bold">{usersWithRoles?.length || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 bg-card/50 backdrop-blur">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                  <Shield className="h-6 w-6 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Admins</p>
+                  <p className="text-2xl font-bold">{usersWithRoles?.filter(u => u.role === 'admin').length || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -179,7 +245,7 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Online Nodes</p>
-                  <p className="text-2xl font-bold">{nodes?.filter(n => n.status === 'online').length || 0}</p>
+                  <p className="text-2xl font-bold">{nodes?.filter(n => n.status === 'online').length || 0}/{nodes?.length || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -189,7 +255,7 @@ export default function AdminPage() {
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-blue-500" />
+                  <HardDrive className="h-6 w-6 text-blue-500" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Capacity</p>
@@ -202,131 +268,222 @@ export default function AdminPage() {
           </Card>
         </div>
 
-        {/* Storage Nodes Management */}
-        <Card className="border-border/50 bg-card/50 backdrop-blur">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Storage Nodes</CardTitle>
-              <CardDescription>Manage storage node configuration</CardDescription>
-            </div>
-            <Dialog open={newNodeOpen} onOpenChange={setNewNodeOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Node
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Storage Node</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="nodeName">Node Name</Label>
-                    <Input
-                      id="nodeName"
-                      value={nodeName}
-                      onChange={(e) => setNodeName(e.target.value)}
-                      placeholder="e.g., Node-US-East-1"
-                    />
+        {/* Tabs for Users and Nodes */}
+        <Tabs defaultValue="users" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger value="nodes" className="flex items-center gap-2">
+              <Server className="h-4 w-4" />
+              Storage Nodes
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Users Tab */}
+          <TabsContent value="users">
+            <Card className="border-border/50 bg-card/50 backdrop-blur">
+              <CardHeader>
+                <CardTitle>User Management</CardTitle>
+                <CardDescription>View and manage user accounts and roles</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {usersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nodeLocation">Location (optional)</Label>
-                    <Input
-                      id="nodeLocation"
-                      value={nodeLocation}
-                      onChange={(e) => setNodeLocation(e.target.value)}
-                      placeholder="e.g., US East"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nodeCapacity">Capacity (GB)</Label>
-                    <Input
-                      id="nodeCapacity"
-                      type="number"
-                      value={nodeCapacity}
-                      onChange={(e) => setNodeCapacity(e.target.value)}
-                      placeholder="10"
-                    />
-                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Storage Used</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Joined</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {usersWithRoles?.map((userItem) => (
+                        <TableRow key={userItem.id}>
+                          <TableCell className="font-medium">
+                            {userItem.display_name || 'No name'}
+                          </TableCell>
+                          <TableCell>{userItem.email}</TableCell>
+                          <TableCell>
+                            {formatBytes(userItem.used_storage)} / {formatBytes(userItem.storage_quota)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant="outline"
+                              className={
+                                userItem.role === 'admin' 
+                                  ? 'border-amber-500/50 text-amber-500' 
+                                  : 'border-muted-foreground/50 text-muted-foreground'
+                              }
+                            >
+                              {userItem.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {formatDistanceToNow(new Date(userItem.created_at), { addSuffix: true })}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={userItem.role}
+                              onValueChange={(role: AppRole) => 
+                                updateUserRole.mutate({ userId: userItem.id, role })
+                              }
+                              disabled={userItem.id === user?.id}
+                            >
+                              <SelectTrigger className="w-[130px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="user">User</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Storage Nodes Tab */}
+          <TabsContent value="nodes">
+            <Card className="border-border/50 bg-card/50 backdrop-blur">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Storage Nodes</CardTitle>
+                  <CardDescription>Manage storage node configuration</CardDescription>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setNewNodeOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={() => addNode.mutate()}
-                    disabled={!nodeName || addNode.isPending}
-                  >
-                    {addNode.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      'Create Node'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Node Name</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Capacity</TableHead>
-                  <TableHead>Used</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {nodes?.map((node) => (
-                  <TableRow key={node.id}>
-                    <TableCell className="font-medium">{node.node_name}</TableCell>
-                    <TableCell>{node.location || '-'}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="outline"
-                        className={
-                          node.status === 'online' 
-                            ? 'border-green-500/50 text-green-500' 
-                            : node.status === 'maintenance'
-                            ? 'border-yellow-500/50 text-yellow-500'
-                            : 'border-red-500/50 text-red-500'
-                        }
+                <Dialog open={newNodeOpen} onOpenChange={setNewNodeOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Node
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Storage Node</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="nodeName">Node Name</Label>
+                        <Input
+                          id="nodeName"
+                          value={nodeName}
+                          onChange={(e) => setNodeName(e.target.value)}
+                          placeholder="e.g., Node-US-East-1"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="nodeLocation">Location (optional)</Label>
+                        <Input
+                          id="nodeLocation"
+                          value={nodeLocation}
+                          onChange={(e) => setNodeLocation(e.target.value)}
+                          placeholder="e.g., US East"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="nodeCapacity">Capacity (GB)</Label>
+                        <Input
+                          id="nodeCapacity"
+                          type="number"
+                          value={nodeCapacity}
+                          onChange={(e) => setNodeCapacity(e.target.value)}
+                          placeholder="10"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setNewNodeOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={() => addNode.mutate()}
+                        disabled={!nodeName || addNode.isPending}
                       >
-                        {node.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatBytes(node.capacity)}</TableCell>
-                    <TableCell>{formatBytes(node.used_space)}</TableCell>
-                    <TableCell>{formatDistanceToNow(new Date(node.created_at), { addSuffix: true })}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={node.status}
-                        onValueChange={(status) => updateNodeStatus.mutate({ nodeId: node.id, status })}
-                      >
-                        <SelectTrigger className="w-[130px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="online">Online</SelectItem>
-                          <SelectItem value="offline">Offline</SelectItem>
-                          <SelectItem value="maintenance">Maintenance</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                        {addNode.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          'Create Node'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Node Name</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Capacity</TableHead>
+                      <TableHead>Used</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {nodes?.map((node) => (
+                      <TableRow key={node.id}>
+                        <TableCell className="font-medium">{node.node_name}</TableCell>
+                        <TableCell>{node.location || '-'}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline"
+                            className={
+                              node.status === 'online' 
+                                ? 'border-green-500/50 text-green-500' 
+                                : node.status === 'maintenance'
+                                ? 'border-yellow-500/50 text-yellow-500'
+                                : 'border-red-500/50 text-red-500'
+                            }
+                          >
+                            {node.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{formatBytes(node.capacity)}</TableCell>
+                        <TableCell>{formatBytes(node.used_space)}</TableCell>
+                        <TableCell>{formatDistanceToNow(new Date(node.created_at), { addSuffix: true })}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={node.status}
+                            onValueChange={(status) => updateNodeStatus.mutate({ nodeId: node.id, status })}
+                          >
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="online">Online</SelectItem>
+                              <SelectItem value="offline">Offline</SelectItem>
+                              <SelectItem value="maintenance">Maintenance</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
