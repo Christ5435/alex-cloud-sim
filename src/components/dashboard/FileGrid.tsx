@@ -34,8 +34,10 @@ import {
   List,
   Loader2,
   Share2,
+  Eye,
 } from 'lucide-react';
 import { ShareDialog } from './ShareDialog';
+import { FilePreviewDialog } from './FilePreviewDialog';
 
 interface FileItem {
   id: string;
@@ -72,6 +74,7 @@ export function FileGrid({
   const showControls = externalSearchQuery === undefined && externalViewMode === undefined;
   const [deleteFile, setDeleteFile] = useState<FileItem | null>(null);
   const [shareFile, setShareFile] = useState<FileItem | null>(null);
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -288,6 +291,10 @@ export function FileGrid({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setPreviewFile(file)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Preview
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleDownload(file)}>
                           <Download className="h-4 w-4 mr-2" />
                           Download
@@ -336,6 +343,10 @@ export function FileGrid({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setPreviewFile(file)}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Preview
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleDownload(file)}>
                       <Download className="h-4 w-4 mr-2" />
                       Download
@@ -384,6 +395,13 @@ export function FileGrid({
         open={!!shareFile}
         onOpenChange={(open) => !open && setShareFile(null)}
         file={shareFile}
+      />
+
+      <FilePreviewDialog
+        open={!!previewFile}
+        onOpenChange={(open) => !open && setPreviewFile(null)}
+        file={previewFile}
+        onDownload={() => previewFile && handleDownload(previewFile)}
       />
     </div>
   );
