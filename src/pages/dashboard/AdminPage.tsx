@@ -35,6 +35,9 @@ export default function AdminPage() {
   const [nodeName, setNodeName] = useState('');
   const [nodeLocation, setNodeLocation] = useState('');
   const [nodeCapacity, setNodeCapacity] = useState('10');
+  const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; quota: number } | null>(null);
+  const [newQuota, setNewQuota] = useState('');
 
   // Check if current user is admin
   const { data: userRole, isLoading: roleLoading } = useQuery({
@@ -167,6 +170,46 @@ export default function AdminPage() {
       });
     },
   });
+
+  // Update user storage quota mutation
+  const updateStorageQuota = useMutation({
+    mutationFn: async ({ userId, quota }: { userId: string; quota: number }) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ storage_quota: quota })
+        .eq('id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setQuotaDialogOpen(false);
+      setSelectedUser(null);
+      setNewQuota('');
+      toast({
+        title: 'Quota updated',
+        description: 'User storage quota has been updated successfully.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const openQuotaDialog = (userItem: { id: string; email: string; storage_quota: number }) => {
+    setSelectedUser({ id: userItem.id, email: userItem.email, quota: userItem.storage_quota });
+    setNewQuota((userItem.storage_quota / (1024 * 1024 * 1024)).toString());
+    setQuotaDialogOpen(true);
+  };
+
+  const handleQuotaSubmit = () => {
+    if (!selectedUser || !newQuota) return;
+    const quotaBytes = parseFloat(newQuota) * 1024 * 1024 * 1024;
+    updateStorageQuota.mutate({ userId: selectedUser.id, quota: quotaBytes });
+  };
 
   if (roleLoading) {
     return (
@@ -331,21 +374,30 @@ export default function AdminPage() {
                             {formatDistanceToNow(new Date(userItem.created_at), { addSuffix: true })}
                           </TableCell>
                           <TableCell>
-                            <Select
-                              value={userItem.role}
-                              onValueChange={(role: AppRole) => 
-                                updateUserRole.mutate({ userId: userItem.id, role })
-                              }
-                              disabled={userItem.id === user?.id}
-                            >
-                              <SelectTrigger className="w-[130px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="user">User</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={userItem.role}
+                                onValueChange={(role: AppRole) => 
+                                  updateUserRole.mutate({ userId: userItem.id, role })
+                                }
+                                disabled={userItem.id === user?.id}
+                              >
+                                <SelectTrigger className="w-[100px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="user">User</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openQuotaDialog(userItem)}
+                              >
+                                <HardDrive className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -354,6 +406,49 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Quota Dialog */}
+            <Dialog open={quotaDialogOpen} onOpenChange={setQuotaDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Adjust Storage Quota</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    Adjusting quota for: <span className="font-medium text-foreground">{selectedUser?.email}</span>
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="newQuota">Storage Quota (GB)</Label>
+                    <Input
+                      id="newQuota"
+                      type="number"
+                      value={newQuota}
+                      onChange={(e) => setNewQuota(e.target.value)}
+                      placeholder="5"
+                      min="1"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setQuotaDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleQuotaSubmit}
+                    disabled={!newQuota || updateStorageQuota.isPending}
+                  >
+                    {updateStorageQuota.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      'Update Quota'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Storage Nodes Tab */}
