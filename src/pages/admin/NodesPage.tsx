@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Server, Plus, Loader2 } from 'lucide-react';
+import { Server, Plus, Loader2, Pencil } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 function formatBytes(bytes: number): string {
@@ -26,6 +26,8 @@ export default function NodesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newNodeOpen, setNewNodeOpen] = useState(false);
+  const [editNodeOpen, setEditNodeOpen] = useState(false);
+  const [editingNode, setEditingNode] = useState<{ id: string; node_name: string; location: string | null; capacity: number } | null>(null);
   const [nodeName, setNodeName] = useState('');
   const [nodeLocation, setNodeLocation] = useState('');
   const [nodeCapacity, setNodeCapacity] = useState('10');
@@ -95,6 +97,39 @@ export default function NodesPage() {
       });
     },
   });
+
+  // Update node mutation (for editing capacity, name, location)
+  const updateNode = useMutation({
+    mutationFn: async ({ nodeId, node_name, location, capacity }: { nodeId: string; node_name: string; location: string | null; capacity: number }) => {
+      const { error } = await supabase
+        .from('storage_nodes')
+        .update({ node_name, location, capacity })
+        .eq('id', nodeId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-nodes'] });
+      queryClient.invalidateQueries({ queryKey: ['storage-nodes'] });
+      setEditNodeOpen(false);
+      setEditingNode(null);
+      toast({
+        title: 'Node updated',
+        description: 'Storage node has been updated successfully.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const openEditDialog = (node: { id: string; node_name: string; location: string | null; capacity: number }) => {
+    setEditingNode(node);
+    setEditNodeOpen(true);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -223,14 +258,21 @@ export default function NodesPage() {
                       <TableCell>
                         {formatDistanceToNow(new Date(node.created_at), { addSuffix: true })}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(node)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <Select
                           value={node.status}
                           onValueChange={(status) =>
                             updateNodeStatus.mutate({ nodeId: node.id, status })
                           }
                         >
-                          <SelectTrigger className="w-[130px]">
+                          <SelectTrigger className="w-[130px] inline-flex">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -247,6 +289,68 @@ export default function NodesPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Node Dialog */}
+        <Dialog open={editNodeOpen} onOpenChange={setEditNodeOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Storage Node</DialogTitle>
+            </DialogHeader>
+            {editingNode && (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editNodeName">Node Name</Label>
+                  <Input
+                    id="editNodeName"
+                    value={editingNode.node_name}
+                    onChange={(e) => setEditingNode({ ...editingNode, node_name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editNodeLocation">Location (optional)</Label>
+                  <Input
+                    id="editNodeLocation"
+                    value={editingNode.location || ''}
+                    onChange={(e) => setEditingNode({ ...editingNode, location: e.target.value || null })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editNodeCapacity">Capacity (GB)</Label>
+                  <Input
+                    id="editNodeCapacity"
+                    type="number"
+                    value={Math.round(editingNode.capacity / (1024 * 1024 * 1024))}
+                    onChange={(e) => setEditingNode({ ...editingNode, capacity: parseFloat(e.target.value) * 1024 * 1024 * 1024 })}
+                    min="1"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditNodeOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => editingNode && updateNode.mutate({
+                  nodeId: editingNode.id,
+                  node_name: editingNode.node_name,
+                  location: editingNode.location,
+                  capacity: editingNode.capacity,
+                })}
+                disabled={!editingNode?.node_name || updateNode.isPending}
+              >
+                {updateNode.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
