@@ -1,10 +1,11 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Shield, Users, Server, ArrowLeft, LogOut } from 'lucide-react';
+import { Loader2, Shield, Users, Server, ArrowLeft, LogOut, FileText, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface AdminLayoutProps {
@@ -14,6 +15,8 @@ interface AdminLayoutProps {
 const navItems = [
   { title: 'Users', url: '/admin', icon: Users },
   { title: 'Storage Nodes', url: '/admin/nodes', icon: Server },
+  { title: 'Activity Logs', url: '/admin/activity', icon: FileText },
+  { title: 'Security Logs', url: '/admin/security', icon: ShieldAlert },
 ];
 
 export function AdminLayout({ children }: AdminLayoutProps) {
@@ -34,6 +37,35 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     enabled: !!user,
   });
 
+  // Log admin access attempts
+  const logAdminAccess = useMutation({
+    mutationFn: async (success: boolean) => {
+      if (!user) return;
+      await supabase.from('security_audit_logs').insert({
+        user_id: user.id,
+        event_type: success ? 'admin_access' : 'admin_access_denied',
+        event_description: success 
+          ? 'Admin panel accessed successfully' 
+          : 'Unauthorized admin panel access attempt',
+        success,
+        metadata: { path: location.pathname },
+      });
+    },
+  });
+
+  // Check OTP verification
+  const otpVerified = typeof window !== 'undefined' 
+    ? sessionStorage.getItem('otp_verified') === 'true' 
+    : false;
+
+  useEffect(() => {
+    if (!loading && !roleLoading && user && userRole === 'admin' && otpVerified) {
+      logAdminAccess.mutate(true);
+    } else if (!loading && !roleLoading && user && userRole !== 'admin') {
+      logAdminAccess.mutate(false);
+    }
+  }, [loading, roleLoading, user, userRole, otpVerified]);
+
   if (loading || roleLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -46,6 +78,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     return <Navigate to="/auth" replace />;
   }
 
+  // Check if OTP was verified
+  if (!otpVerified) {
+    return <Navigate to="/auth" replace />;
+  }
+
   if (userRole !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -53,7 +90,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
             <Shield className="h-8 w-8 text-destructive" />
           </div>
-          <h2 className="text-xl font-bold">Access Denied</h2>
+          <h2 className="text-xl font-bold">403 Forbidden – Access Denied</h2>
           <p className="text-muted-foreground max-w-md">
             You don't have permission to access the admin panel.
           </p>
@@ -70,15 +107,23 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="min-h-screen flex bg-background">
+      {/* Admin Mode Banner */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-destructive text-destructive-foreground text-center py-1 text-xs font-semibold">
+        🔐 ADMIN MODE — All actions are logged
+      </div>
+
       {/* Sidebar */}
-      <aside className="w-64 border-r bg-card flex flex-col">
+      <aside className="w-64 border-r bg-card flex flex-col mt-6">
         <div className="p-4 border-b">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-primary" />
+            <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
+              <Shield className="h-5 w-5 text-destructive" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">Admin Panel</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="font-bold text-lg">Admin Panel</h1>
+                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">ADMIN</Badge>
+              </div>
               <p className="text-xs text-muted-foreground">System Management</p>
             </div>
           </div>
@@ -121,7 +166,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-6 overflow-auto mt-6">
         {children}
       </main>
     </div>
