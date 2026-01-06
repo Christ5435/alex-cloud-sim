@@ -24,6 +24,7 @@ import {
   Activity,
   Settings,
   LogOut,
+  Shield,
 } from 'lucide-react';
 
 const mainItems = [
@@ -35,6 +36,7 @@ const mainItems = [
 
 const settingsItems = [
   { title: 'Settings', url: '/dashboard/settings', icon: Settings },
+  { title: 'Admin Panel', url: '/dashboard/admin', icon: Shield },
 ];
 
 export function AppSidebar() {

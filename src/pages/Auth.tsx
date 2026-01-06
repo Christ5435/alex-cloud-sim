@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { Cloud, Mail, Lock, User, Loader2 } from 'lucide-react';
 
 const authSchema = z.object({
@@ -29,12 +28,8 @@ export default function Auth() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in and OTP verified
     if (user) {
-      const otpVerified = sessionStorage.getItem('otp_verified');
-      if (otpVerified === 'true') {
-        navigate('/dashboard');
-      }
+      navigate('/dashboard');
     }
   }, [user, navigate]);
 
@@ -76,42 +71,11 @@ export default function Auth() {
             variant: 'destructive',
           });
         } else {
-          // Get user ID for OTP generation
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          
-          if (authUser) {
-            // Generate OTP
-            const { data: otpData, error: otpError } = await supabase.functions.invoke('generate-otp', {
-              body: { userId: authUser.id, email, purpose: 'login' },
-            });
-
-            if (otpError) {
-              toast({
-                title: 'Error',
-                description: 'Failed to send verification code. Please try again.',
-                variant: 'destructive',
-              });
-              return;
-            }
-
-            toast({
-              title: 'Verification Required',
-              description: 'A verification code has been sent to your email.',
-            });
-
-            // Show OTP for testing (remove in production)
-            if (otpData?.otp_for_testing) {
-              toast({
-                title: 'Test OTP',
-                description: `Your OTP is: ${otpData.otp_for_testing}`,
-              });
-            }
-
-            // Navigate to OTP verification
-            navigate('/otp-verification', {
-              state: { userId: authUser.id, email, redirectTo: '/dashboard' },
-            });
-          }
+          toast({
+            title: 'Welcome back!',
+            description: 'You have successfully logged in.',
+          });
+          navigate('/dashboard');
         }
       } else {
         const { error } = await signUp(email, password, displayName);
@@ -130,34 +94,11 @@ export default function Auth() {
             });
           }
         } else {
-          // For new signups, also require OTP
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          
-          if (authUser) {
-            const { data: otpData, error: otpError } = await supabase.functions.invoke('generate-otp', {
-              body: { userId: authUser.id, email, purpose: 'login' },
-            });
-
-            if (!otpError) {
-              toast({
-                title: 'Account Created!',
-                description: 'Please verify your identity with the code sent to your email.',
-              });
-
-              if (otpData?.otp_for_testing) {
-                toast({
-                  title: 'Test OTP',
-                  description: `Your OTP is: ${otpData.otp_for_testing}`,
-                });
-              }
-
-              navigate('/otp-verification', {
-                state: { userId: authUser.id, email, redirectTo: '/dashboard' },
-              });
-            } else {
-              navigate('/dashboard');
-            }
-          }
+          toast({
+            title: 'Account Created!',
+            description: 'Welcome to AlexCloudSim. You can now access your dashboard.',
+          });
+          navigate('/dashboard');
         }
       }
     } finally {

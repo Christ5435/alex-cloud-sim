@@ -61,9 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Clear OTP verification on sign out
-    sessionStorage.removeItem('otp_verified');
-    sessionStorage.removeItem('otp_verified_at');
     await supabase.auth.signOut();
   };
 
