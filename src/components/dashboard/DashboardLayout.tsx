@@ -12,6 +12,11 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, loading } = useAuth();
 
+  // Check OTP verification
+  const otpVerified = typeof window !== 'undefined' 
+    ? sessionStorage.getItem('otp_verified') === 'true' 
+    : false;
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -21,6 +26,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Redirect to auth if OTP not verified
+  if (!otpVerified) {
     return <Navigate to="/auth" replace />;
   }
 
